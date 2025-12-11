@@ -1,3 +1,6 @@
+from .file_scanner import list_code_files
+from .llm_client import summarize_text_chunks
+from .folder_aggregator import aggregate_folder_summaries
 from typing import Dict, List
 import os
 
@@ -92,15 +95,13 @@ def summarize_file(path: str) -> str:
 
 def summarize_project(root_path: str) -> Dict[str, Dict]:
     """
-    Summarize all files and then the overall project.
+    Summarize all files, folders, and then the overall project.
 
     Returns:
       {
         "project_summary": "...",
-        "files": {
-          "relative/path.py": "summary...",
-          ...
-        }
+        "files": { "rel/file.py": "..." },
+        "folders": { "rel/folder": "..." }
       }
     """
 
@@ -111,6 +112,7 @@ def summarize_project(root_path: str) -> Dict[str, Dict]:
         return {
             "project_summary": "No code files were detected in this project.",
             "files": {},
+            "folders": {},
         }
 
     for abs_path in file_paths:
@@ -118,20 +120,30 @@ def summarize_project(root_path: str) -> Dict[str, Dict]:
         print(f"Summarizing {rel_path} ...")
         file_summaries[rel_path] = summarize_file(abs_path)
 
-    # Build project summary from the file summaries instead of raw code
-    # to constrain hallucinations. [web:59][web:62]
-    project_context_lines = [
-        f"{path} -> {summary}"
-        for path, summary in file_summaries.items()
-    ]
+    # Day 2: folder-level aggregation
+    folder_summaries = aggregate_folder_summaries(root_path, file_summaries)
+
+    # Build project summary from both file and folder summaries
+    project_context_lines = []
+
+    project_context_lines.append("=== FOLDER SUMMARIES ===")
+    for folder, summary in folder_summaries.items():
+        label = folder or "<root>"
+        project_context_lines.append(f"[Folder: {label}] -> {summary}")
+
+    project_context_lines.append("\n=== FILE SUMMARIES ===")
+    for path, summary in file_summaries.items():
+        project_context_lines.append(f"[File: {path}] -> {summary}")
+
     project_text = "\n\n".join(project_context_lines)
     project_chunks = _chunk_text(project_text)
 
     system_instruction = (
         "You are an AI assistant that summarizes entire codebases. "
-        "You are given per-file descriptions. "
-        "Describe the overall purpose of the project, the main components, "
-        "and how they fit together, strictly based on these descriptions."
+        "You are given folder-level and file-level descriptions. "
+        "Describe the overall purpose of the project, its main components, "
+        "typical workflow (entrypoints and major flows), and any notable "
+        "architectural patterns. Stay consistent with the provided summaries."
     )
 
     project_summary = summarize_text_chunks(
@@ -143,4 +155,6 @@ def summarize_project(root_path: str) -> Dict[str, Dict]:
     return {
         "project_summary": project_summary,
         "files": file_summaries,
+        "folders": folder_summaries,
     }
+
