@@ -3,27 +3,27 @@ import os
 import streamlit as st
 from pathlib import Path
 from streamlit_agraph import agraph, Node, Edge, Config
-from src.file_scanner import list_code_files
+from src.file_scanner import list_code_files  # ADD THIS
 from src.summarizer import summarize_project
 
-def predict_api_cost(num_files: int, avg_file_size_kb: float = 20) -> dict:
-    """Predict Gemini API cost."""
-    tokens_per_kb = 250
-    total_input_tokens = int(num_files * avg_file_size_kb * tokens_per_kb * 1.5)
-    total_output_tokens = int(total_input_tokens * 0.3)
+# def predict_api_cost(num_files: int, avg_file_size_kb: float = 20) -> dict:
+#     """Predict Gemini API cost."""
+#     tokens_per_kb = 250
+#     total_input_tokens = int(num_files * avg_file_size_kb * tokens_per_kb * 1.5)
+#     total_output_tokens = int(total_input_tokens * 0.3)
     
-    cost_per_1m_input = 0.075 / 1000000
-    cost_per_1m_output = 0.3 / 1000000
+#     cost_per_1m_input = 0.075 / 1000000
+#     cost_per_1m_output = 0.3 / 1000000
     
-    total_cost = (total_input_tokens * cost_per_1m_input + 
-                  total_output_tokens * cost_per_1m_output)
+#     total_cost = (total_input_tokens * cost_per_1m_input + 
+#                   total_output_tokens * cost_per_1m_output)
     
-    return {
-        "estimated_cost_usd": round(total_cost, 4),
-        "input_tokens": total_input_tokens,
-        "output_tokens": total_output_tokens,
-        "files": num_files
-    }
+#     return {
+#         "estimated_cost_usd": round(total_cost, 4),
+#         "input_tokens": total_input_tokens,
+#         "output_tokens": total_output_tokens,
+#         "files": num_files
+#     }
 
 def generate_readme(result: dict, root_path: str) -> str:
     """Generate production-ready README.md."""
@@ -70,15 +70,15 @@ def main():
         help="Local folder containing your codebase",
     )
     
-    # COST PREDICTOR (IMPACT FEATURE #2) ✅
-    if project_path and os.path.exists(project_path):
-        try:
-            num_files = len(list_code_files(project_path))
-            cost = predict_api_cost(num_files)
-            st.sidebar.subheader("💰 Cost Preview")
-            st.sidebar.metric("Est. Cost", f"${cost['estimated_cost_usd']}", delta=None)
-        except:
-            pass
+    # COST PREDICTOR (IMPACT FEATURE #2)
+    # if project_path and os.path.exists(project_path):
+    #     try:
+    #         num_files = len(list_code_files(project_path))
+    #         cost = predict_api_cost(num_files)
+    #         st.sidebar.subheader("💰 Cost Preview")
+    #         st.sidebar.metric("Est. Cost", f"${cost['estimated_cost_usd']}", delta=None)
+    #     except:
+    #         pass
     
     max_files = st.sidebar.slider("Max files to analyze", 10, 100, 50)
     run_button = st.sidebar.button("🔍 Analyze Codebase", type="primary")
@@ -86,7 +86,7 @@ def main():
     # Main tabs
     tab1, tab2, tab3 = st.tabs(["📊 Project Overview", "📁 Folder Structure", "🔗 Workflow Graph"])
 
-    # RESULT STORAGE
+    # RESULT STORAGE (FIX #1)
     result = None
 
     if run_button and project_path:
@@ -104,15 +104,16 @@ def main():
             json.dump(result, f, indent=2, ensure_ascii=False)
         st.sidebar.success(f"✅ Saved to: `{out_path}`")
 
-        # 1-CLICK README (IMPACT FEATURE #3) ✅
+        # 1-CLICK README (IMPACT FEATURE #3)
         st.sidebar.markdown("---")
-        st.sidebar.download_button(
-            label="📄 Download README.md",
-            data=generate_readme(result, str(root)),
-            file_name="README.md",
-            mime="text/markdown",
-            use_container_width=True
-        )
+        if result:
+            st.sidebar.download_button(
+                label="📄 Download README.md",
+                data=generate_readme(result, str(root)),
+                file_name="README.md",
+                mime="text/markdown",
+                use_container_width=True
+            )
 
         # TAB 1: Project Overview
         with tab1:
@@ -130,15 +131,6 @@ def main():
             st.subheader("⭐ Top Modules (by importance)")
             for path, score in workflow["top_modules"]:
                 st.info(f"**{os.path.basename(path)}** ({score:.1%}) - {path}")
-            
-            # 🔥 SECURITY SCAN (IMPACT FEATURE #1) - ADD THIS
-            st.subheader("🛡️ Security Scan")
-            security = result.get("security", {"risks": []})
-            if security["risks"]:
-                for risk in security["risks"]:
-                    st.error(f"**{os.path.basename(risk['file'])}**: {', '.join(risk['issues'])}")
-            else:
-                st.success(f"✅ No security risks in {security.get('total_files_scanned', 0)} files")
 
         # TAB 2: Folder/File Structure
         with tab2:
@@ -157,7 +149,7 @@ def main():
                     with st.expander(f"📄 {os.path.basename(path)}"):
                         st.markdown(summary)
 
-        # TAB 3: Workflow Graph (FIXED GRAPH METRICS)
+        # TAB 3: Workflow Graph (FIXED)
         with tab3:
             st.subheader("🔗 **Live Dependency Graph** ✨")
             st.markdown("*Click nodes to expand • Drag to explore • Colors = language*")
@@ -166,16 +158,14 @@ def main():
             graph_data = workflow["graph"]
             
             if graph_data.get("nodes"):
-                # ENHANCED nodes with real grouping
+                # ENHANCED nodes with real grouping (FIX #2)
                 nodes = []
-                node_extensions = set()
                 for node_data in graph_data["nodes"]:
                     path = node_data["id"]
                     importance = workflow["important_modules"].get(path, 0)
                     
                     # Language-based colors + entrypoint highlighting
                     ext = os.path.splitext(path)[1][1:]  # py, js, etc.
-                    node_extensions.add(ext)
                     base_color = {
                         'py': '#3776ab', 'js': '#f7df1e', 'ts': '#3178c6',
                         'java': '#e34f26', 'go': '#00add8', 'rs': '#dea584'
@@ -191,7 +181,7 @@ def main():
                     nodes.append(Node(
                         id=path,
                         label=os.path.basename(path),
-                        title=f"{path}\nImportance: {importance:.1%}",
+                        title=f"{path}\nImportance: {importance:.1%}",  # tooltip
                         size=size,
                         color=color,
                         shape="dot"
@@ -221,7 +211,7 @@ def main():
                 # RENDER INTERACTIVE GRAPH
                 graph_result = agraph(nodes=nodes, edges=edges, config=config)
                 
-                # FIXED Stats below graph
+                # Stats below graph
                 st.markdown("---")
                 col1, col2, col3 = st.columns(3)
                 with col1:
@@ -229,7 +219,7 @@ def main():
                 with col2:
                     st.metric("Edges", len(edges))
                 with col3:
-                    st.metric("Languages", len(node_extensions))  # ✅ FIXED
+                    st.metric("Languages", len(set(node.id for node in nodes if '.' in node.id)))
             else:
                 st.warning("⚠️ No dependencies detected. Try a larger project with imports.")
 
