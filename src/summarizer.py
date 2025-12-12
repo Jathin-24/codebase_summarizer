@@ -7,7 +7,8 @@ from .folder_aggregator import aggregate_folder_summaries
 from .workflow_analyzer import (
     detect_entrypoints, 
     detect_important_modules, 
-    build_simple_graph
+    build_real_dependency_graph,
+    security_scan
 )
 
 MAX_CHARS_PER_CHUNK = 4000
@@ -119,7 +120,7 @@ def summarize_project(root_path: str) -> Dict[str, Any]:
     entrypoints = detect_entrypoints(file_paths)
     module_importance = detect_important_modules(file_paths)
     top_modules = sorted(module_importance.items(), key=lambda x: x[1], reverse=True)[:5]
-    graph_data = build_simple_graph(file_paths, file_contents)
+    graph_data = build_real_dependency_graph(file_paths, file_contents)
 
     # Step 4: Enhanced project summary with ALL context
     print("🎯 Generating project summary...")
@@ -166,6 +167,10 @@ def summarize_project(root_path: str) -> Dict[str, Any]:
         filename="PROJECT_OVERVIEW",
     )
 
+    # Day 3: Security scan (NEW IMPACT FEATURE)
+    print("🛡️ Running security scan...")
+    security = security_scan(file_contents)
+
     return {
         "project_summary": project_summary,
         "files": file_summaries,
@@ -175,5 +180,7 @@ def summarize_project(root_path: str) -> Dict[str, Any]:
             "important_modules": {os.path.relpath(k, root_path): v for k, v in module_importance.items()},
             "top_modules": [(os.path.relpath(p, root_path), score) for p, score in top_modules],
             "graph": graph_data
-        }
+        },
+        "security": security  # ADD THIS LINE
     }
+

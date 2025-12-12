@@ -1,0 +1,170 @@
+{
+  "project_summary": "This project is a codebase summarization tool that analyzes codebases to generate documentation and insights.\n\n**Main Workflow:**\n\nThe project has two primary entry points:\n\n1.  **Command-Line Interface (`cli.py`):** Users can execute the summarizer directly from the terminal, specifying the project path and an output file.\n2.  **Web Application (`web_app.py`):** A Streamlit-based interface allows users to input a project path, configure parameters, visualize project structure and dependencies (workflow graph), and generate a README file.\n\nBoth entry points likely interact with the core logic within the `src` folder. The general flow involves:\n\n*   **Configuration Loading (`src\\config.py`):** Loads necessary settings, including Gemini API credentials.\n*   **File Scanning (`src\\file_scanner.py`):** Identifies relevant code files within the project directory, potentially ignoring specified directories.\n*   **Code Summarization (`src\\summarizer.py`):** Reads code file content, chunks it, and uses an LLM client (`src\\llm_client.py`) to generate summaries for individual files.\n*   **Hierarchical Aggregation (`src\\folder_aggregator.py`):** Aggregates file summaries to create summaries for folders.\n*   **Workflow and Security Analysis (`src\\workflow_analyzer.py`):** Detects entry points, module importance, code dependencies, and potential security risks.\n*   **Report Generation (`src\\generate_readme.py`):** Formats the analyzed and summarized information into a README.md file.\n\n**Architecture Patterns:**\n\nThe architecture appears to follow a layered pattern, with a clear separation of concerns:\n\n*   **Presentation Layer:** `cli.py` and `web_app.py` handle user interaction.\n*   **Core Logic/Service Layer:** The `src` folder contains the main functionalities like scanning, summarizing, and analysis.\n*   **Configuration Layer:** `src\\config.py` manages external dependencies and settings.\n\n**Key Components:**\n\n*   **`src\\config.py`:** Manages configuration for the Gemini API.\n*   **`cli.py`:** Provides the command-line interface for the summarizer.\n*   **`web_app.py`:** Implements the Streamlit web application for interactive use.\n*   **`src\\file_scanner.py`:** Responsible for discovering code files within a project.\n*   **`src\\folder_aggregator.py`:** Handles the aggregation of file summaries into folder summaries.\n*   **`src\\summarizer.py`:** Orchestrates the summarization of individual files and the entire project.\n*   **`src\\llm_client.py`:** Manages interactions with a generative AI model for text summarization.\n*   **`src\\workflow_analyzer.py`:** Analyzes code to identify entry points, module importance, and dependencies.\n*   **`src\\generate_readme.py`:** Formats the analysis results into a README file.\n\nThe role of `src\\__init__.py` is not clear from the provided information, as it is described as empty. The exact data flow between all components, particularly how the output of `workflow_analyzer.py` and `summarizer.py` are combined by `generate_readme.py` in the web application context, is not entirely clear.",
+  "files": {
+    "cli.py": "The `cli.py` file implements a command-line interface for a codebase summarizer.\n\nIt uses the `argparse` module to define and parse command-line arguments:\n- A required positional argument `path` specifies the root directory of the project to summarize.\n- An optional argument `--out` specifies the output JSON file name, defaulting to `code_summary.json`.\n\nThe `main` function:\n- Initializes an `ArgumentParser` with a description.\n- Parses the provided command-line arguments.\n- Resolves the input path to an absolute path.\n- Checks if the provided path exists and exits if it doesn't.\n- Prints a message indicating the start of the scanning and summarizing process.\n- Calls the `summarize_project` function (imported from `src.summarizer`) with the project root path.\n- Resolves the output path to an absolute path.\n- Opens the output file in write mode with UTF-8 encoding.\n- Uses `json.dump` to write the result of `summarize_project` to the output file in JSON format with an indent of 2 spaces.\n- Prints a confirmation message indicating where the summary was written.\n\nThe script executes the `main` function when run directly.",
+    "web_app.py": "The file `web_app.py` implements a Streamlit web application for summarizing and visualizing codebases.\n\nIt defines functions for:\n- `predict_api_cost`: Estimates the cost of using an API based on the number of files and average file size.\n- `generate_readme`: Creates a README.md file content based on the analysis results, including project summary, entry points, modules, and security risks.\n- `main`: The core Streamlit application logic. It sets up the page configuration, title, and sidebar. The sidebar allows users to input a project path, configure analysis parameters (like `max_files`), and trigger the analysis. It also displays a cost preview and provides a download button for the generated README.\n\nThe main section of the app features three tabs:\n1.  **Project Overview**: Displays a summary of the project, detected entry points, top modules by importance, and security scan results.\n2.  **Folder Structure**: Shows a breakdown of folders and files, with expandable sections for summaries of each.\n3.  **Workflow Graph**: Renders an interactive dependency graph using `streamlit_agraph`. The graph visualizes nodes (files) and edges (dependencies), with node colors representing programming languages and sizes indicating importance. It also displays statistics about the graph, such as the number of nodes, edges, and detected languages.\n\nThe application uses functions from `src.file_scanner` and `src.summarizer` for its core analysis tasks. The results of the `summarize_project` function are cached locally as a JSON file.",
+    "src\\config.py": "The `config.py` file is responsible for loading and managing configuration settings, specifically for a Gemini API.\n\nIt uses the `dotenv` library to load environment variables from a `.env` file.\n\nThe file defines two configuration variables:\n*   `GEMINI_API_KEY`: This variable is populated by retrieving the `GEMINI_API_KEY` environment variable. If this variable is not found, a `RuntimeError` is raised, indicating that the API key is not set.\n*   `GEMINI_MODEL`: This variable is populated by retrieving the `GEMINI_MODEL` environment variable. If this variable is not found, it defaults to `\"gemini-2.5-flash\"`.",
+    "src\\file_scanner.py": "The `file_scanner.py` file implements functionality to identify and list code files within a given directory.\n\nIt defines a set `CODE_EXTENSIONS` containing common file extensions associated with programming languages and front-end web development. It also defines a set `IGNORE_DIRS` for common directories that should be excluded from scanning.\n\nThe `is_code_file(filename: str) -> bool` function checks if a given filename has an extension present in `CODE_EXTENSIONS`, performing a case-insensitive comparison.\n\nThe `list_code_files(root_path: str) -> List[str]` function recursively traverses the directory specified by `root_path`. During traversal, it prunes directories listed in `IGNORE_DIRS` from being further explored. For each file encountered, it checks if it's a code file using `is_code_file`. If it is, the full path to the file is added to a list, which is then returned.",
+    "src\\folder_aggregator.py": "The `folder_aggregator.py` file contains functions to create summaries for folders based on file summaries.\n\n- `_chunk_text(text: str, max_chars: int = MAX_FOLDER_SUMMARY_CHARS) -> List[str]`: This helper function splits a given `text` into smaller chunks, each with a maximum length defined by `max_chars`.\n\n- `aggregate_folder_summaries(root_path: str, file_summaries: Dict[str, str]) -> Dict[str, str]`: This function takes a dictionary of file summaries (where keys are relative file paths) and generates a dictionary of folder summaries.\n    - It first organizes the file summaries by their parent folders.\n    - Then, for each folder, it combines the summaries of files within that folder and its subfolders.\n    - The combined text for each folder is chunked using `_chunk_text`.\n    - A `system_instruction` is defined to guide an AI model in summarizing the folder's content and its role in the project.\n    - The `summarize_text_chunks` function (imported from `.llm_client`) is called for each folder to generate its summary.\n    - The resulting folder summaries are returned in a dictionary where keys are folder paths and values are their summaries. The root folder is represented by an empty string `\"\"` as a key.",
+    "src\\generate_readme.py": "The `generate_readme.py` file contains a single function, `generate_readme`, which takes a dictionary `result` as input and returns a string formatted as a README.md file.\n\nThe README content includes:\n- A main heading derived from the project path in the `result` dictionary.\n- An \"Architecture Overview\" section using a truncated version of `project_summary` from `result`.\n- An \"Entry Points\" section, listing each entry point from `result['workflow']['entrypoints']` as a formatted list item.\n- A \"Modules by Importance\" section, listing modules and their importance percentage from `result['workflow']['top_modules']`.\n- A \"Security Status\" section, indicating the number of risks found in `result['security']['risks']`.\n- A footer indicating the generation source.",
+    "src\\llm_client.py": "The `llm_client.py` file provides functionality to interact with a generative AI model.\n\nHere's a breakdown of its implementation:\n\n- **Configuration**: It configures the `google.generativeai` library using `GEMINI_API_KEY` and initializes a `GenerativeModel` with `GEMINI_MODEL`.\n- **`summarize_text_chunks` function**:\n    - Takes a list of string `chunks`, a `system_instruction` string, and optional `filename` and `metadata_text` strings as input.\n    - It introduces a `time.sleep(35)` delay.\n    - It joins the input `chunks` into a single string separated by double newlines (`\\n\\n`).\n    - It constructs a `file_info` string if `filename` or `metadata_text` are provided.\n    - It then creates a `prompt` by combining the `system_instruction`, a set of explicit rules, the `file_info` (if any), the joined content, and a final instruction to provide a concise, factual summary.\n    - It calls `_model.generate_content(prompt)` to get a response from the generative model.\n    - It returns the `text` attribute of the `response` object.\n\nThe function's primary purpose is to generate a summary of provided text content, adhering to specific rules embedded within the prompt.",
+    "src\\summarizer.py": "The `summarizer.py` file contains functions for summarizing code files and an entire project.\n\nThe `_read_file` function reads the content of a given file path, returning an error message if reading fails.\nThe `_chunk_text` function splits a given text into smaller chunks based on a maximum character limit.\nThe `_get_file_stats` function retrieves the size in bytes and the number of lines for a given file path.\n\nThe `summarize_file` function reads a file, gets its statistics, and if the file has meaningful content, it chunks the content and uses `summarize_text_chunks` (imported from `.llm_client`) to generate a summary. It includes file metadata in the summarization prompt.\n\nThe `summarize_project` function orchestrates the summarization of an entire project:\n1. It uses `list_code_files` (imported from `.file_scanner`) to get a list of all code files in a root path.\n2. It iterates through these files, summarizing each one using `summarize_file` and storing the results.\n3. It aggregates folder summaries using `aggregate_folder_summaries` (imported from `.folder_aggregator`).\n4. It performs workflow analysis by detecting entrypoints and important modules using functions from `.workflow_analyzer`. It also builds a dependency graph using `build_real_dependency_graph`.\n5. It constructs a comprehensive `project_context_lines` string by combining workflow entry points, important modules, folder summaries, and top file summaries. This context is then chunked and summarized by `summarize_text_chunks` to produce an overall `project_summary`.\n6. It runs a security scan using `security_scan` (imported from `.workflow_analyzer`).\n7. It returns a dictionary containing the `project_summary`, individual `files` summaries, `folders` summaries, `workflow` details (entrypoints, important modules, top modules, dependency graph), and `security` scan results.",
+    "src\\workflow_analyzer.py": "The Python file `workflow_analyzer.py` contains functions for analyzing code files.\n\nIt includes:\n- `detect_entrypoints`: Identifies likely entry point files for various programming languages based on predefined filename patterns.\n- `detect_important_modules`: Scores files based on their filenames and directory depth, assigning higher importance to files in the root directory and those matching common module patterns (e.g., \"models\", \"routes\", \"services\").\n- `parse_python_imports`: Uses Python's `ast` module to parse import statements from Python code, extracting the top-level module names.\n- `parse_js_imports`: Uses regular expressions to parse import statements from JavaScript code.\n- `build_real_dependency_graph`: Constructs a dependency graph by identifying import statements in Python, JavaScript, and TypeScript files and mapping them to other files within the provided `file_paths`. It generates nodes representing files and edges representing imports.\n- `security_scan`: Scans file contents for potential security risks, including hardcoded secrets (API keys, passwords) and dangerous code patterns like `exec()`, `eval()`, and `subprocess` with `shell=True`.\n- `predict_api_cost`: Estimates the cost of using an API based on the number of files and an average file size, calculating estimated input/output tokens and the total cost in USD.",
+    "src\\__init__.py": "This file (__init__.py) is effectively empty or contains no meaningful code/content yet (0 lines, 0 bytes)."
+  },
+  "folders": {
+    "": "This folder represents the entry points and user interfaces for a codebase summarization tool.\n\nIts main responsibilities are to:\n-   Provide a command-line interface (`cli.py`) for users to run the summarizer directly from the terminal, specifying the project path and an output file.\n-   Offer a Streamlit-based web application (`web_app.py`) that allows users to input a project path, configure analysis parameters, visualize the project structure, dependencies (via a workflow graph), and generate a README file.\n\nIt fits into the overall codebase by acting as the primary interface for users to interact with the project's summarization and analysis capabilities, which are presumably implemented in the `src` directory (as indicated by imports).",
+    "src": "This `src` folder contains the core logic for a project that aims to analyze and summarize codebases. Its main responsibilities include:\n\n*   **Configuration Management**: Loading API keys and model names for interacting with a generative AI (Gemini API).\n*   **Codebase Scanning**: Identifying and listing relevant code files within a project directory, while ignoring specific directories.\n*   **Content Summarization**: Reading code files, chunking their content, and using an LLM client to generate summaries for individual files.\n*   **Hierarchical Summarization**: Aggregating file summaries to create summaries for folders, reflecting their content and role.\n*   **Project-Level Analysis**: Orchestrating the summarization of the entire project, including workflow analysis (entry points, important modules, dependency graphs) and security scanning.\n*   **LLM Interaction**: Providing an interface to interact with a generative AI model for summarizing text content.\n*   **Report Generation**: Formatting the analyzed and summarized information into a README.md file.\n*   **Workflow and Security Analysis**: Detecting entry points, module importance, code dependencies, and potential security risks.\n\nThe `src` folder fits into the overall codebase as the engine that processes and understands the project's code, ultimately producing insights and documentation. The `config.py` handles external dependencies, `file_scanner.py` discovers code, `llm_client.py` handles AI interactions, `summarizer.py` orchestrates the summarization process, `folder_aggregator.py` builds hierarchical summaries, `workflow_analyzer.py` performs deeper code analysis, and `generate_readme.py` presents the findings. The `__init__.py` file appears to be an empty placeholder."
+  },
+  "workflow": {
+    "entrypoints": [],
+    "important_modules": {
+      "cli.py": 0.11111111111111112,
+      "web_app.py": 0.11111111111111112,
+      "src\\config.py": 1.0,
+      "src\\file_scanner.py": 0.11111111111111112,
+      "src\\folder_aggregator.py": 0.11111111111111112,
+      "src\\generate_readme.py": 0.11111111111111112,
+      "src\\llm_client.py": 0.11111111111111112,
+      "src\\summarizer.py": 0.11111111111111112,
+      "src\\workflow_analyzer.py": 0.11111111111111112,
+      "src\\__init__.py": 0.11111111111111112
+    },
+    "top_modules": [
+      [
+        "src\\config.py",
+        1.0
+      ],
+      [
+        "cli.py",
+        0.11111111111111112
+      ],
+      [
+        "web_app.py",
+        0.11111111111111112
+      ],
+      [
+        "src\\file_scanner.py",
+        0.11111111111111112
+      ],
+      [
+        "src\\folder_aggregator.py",
+        0.11111111111111112
+      ]
+    ],
+    "graph": {
+      "nodes": [
+        {
+          "id": "C:\\Users\\user\\Documents\\Coding\\codebase_summarizer\\cli.py",
+          "label": "cli.py",
+          "group": "py",
+          "size": 15
+        },
+        {
+          "id": "C:\\Users\\user\\Documents\\Coding\\codebase_summarizer\\web_app.py",
+          "label": "web_app.py",
+          "group": "py",
+          "size": 15
+        },
+        {
+          "id": "C:\\Users\\user\\Documents\\Coding\\codebase_summarizer\\src\\config.py",
+          "label": "config.py",
+          "group": "py",
+          "size": 15
+        },
+        {
+          "id": "C:\\Users\\user\\Documents\\Coding\\codebase_summarizer\\src\\file_scanner.py",
+          "label": "file_scanner.py",
+          "group": "py",
+          "size": 15
+        },
+        {
+          "id": "C:\\Users\\user\\Documents\\Coding\\codebase_summarizer\\src\\folder_aggregator.py",
+          "label": "folder_aggregator.py",
+          "group": "py",
+          "size": 15
+        },
+        {
+          "id": "C:\\Users\\user\\Documents\\Coding\\codebase_summarizer\\src\\generate_readme.py",
+          "label": "generate_readme.py",
+          "group": "py",
+          "size": 15
+        },
+        {
+          "id": "C:\\Users\\user\\Documents\\Coding\\codebase_summarizer\\src\\llm_client.py",
+          "label": "llm_client.py",
+          "group": "py",
+          "size": 15
+        },
+        {
+          "id": "C:\\Users\\user\\Documents\\Coding\\codebase_summarizer\\src\\summarizer.py",
+          "label": "summarizer.py",
+          "group": "py",
+          "size": 15
+        },
+        {
+          "id": "C:\\Users\\user\\Documents\\Coding\\codebase_summarizer\\src\\workflow_analyzer.py",
+          "label": "workflow_analyzer.py",
+          "group": "py",
+          "size": 15
+        },
+        {
+          "id": "C:\\Users\\user\\Documents\\Coding\\codebase_summarizer\\src\\__init__.py",
+          "label": "__init__.py",
+          "group": "py",
+          "size": 15
+        }
+      ],
+      "edges": [
+        {
+          "from": "C:\\Users\\user\\Documents\\Coding\\codebase_summarizer\\src\\folder_aggregator.py",
+          "to": "C:\\Users\\user\\Documents\\Coding\\codebase_summarizer\\src\\llm_client.py",
+          "label": "imports",
+          "value": 1
+        },
+        {
+          "from": "C:\\Users\\user\\Documents\\Coding\\codebase_summarizer\\src\\llm_client.py",
+          "to": "C:\\Users\\user\\Documents\\Coding\\codebase_summarizer\\src\\config.py",
+          "label": "imports",
+          "value": 1
+        },
+        {
+          "from": "C:\\Users\\user\\Documents\\Coding\\codebase_summarizer\\src\\summarizer.py",
+          "to": "C:\\Users\\user\\Documents\\Coding\\codebase_summarizer\\src\\folder_aggregator.py",
+          "label": "imports",
+          "value": 1
+        },
+        {
+          "from": "C:\\Users\\user\\Documents\\Coding\\codebase_summarizer\\src\\summarizer.py",
+          "to": "C:\\Users\\user\\Documents\\Coding\\codebase_summarizer\\src\\workflow_analyzer.py",
+          "label": "imports",
+          "value": 1
+        },
+        {
+          "from": "C:\\Users\\user\\Documents\\Coding\\codebase_summarizer\\src\\summarizer.py",
+          "to": "C:\\Users\\user\\Documents\\Coding\\codebase_summarizer\\src\\llm_client.py",
+          "label": "imports",
+          "value": 1
+        },
+        {
+          "from": "C:\\Users\\user\\Documents\\Coding\\codebase_summarizer\\src\\workflow_analyzer.py",
+          "to": "C:\\Users\\user\\Documents\\Coding\\codebase_summarizer\\src\\folder_aggregator.py",
+          "label": "imports",
+          "value": 1
+        }
+      ]
+    }
+  },
+  "security": {
+    "risks": [
+      {
+        "file": "C:\\Users\\user\\Documents\\Coding\\codebase_summarizer\\src\\workflow_analyzer.py",
+        "issues": [
+          "⚠️ Dangerous eval/exec detected",
+          "⚠️ Shell injection risk"
+        ]
+      }
+    ],
+    "total_files_scanned": 10
+  }
+}

@@ -1,5 +1,6 @@
 from typing import List, Optional
 import google.generativeai as genai
+import time 
 
 from .config import GEMINI_API_KEY, GEMINI_MODEL
 
@@ -19,6 +20,7 @@ def summarize_text_chunks(
     Join chunks and get one summary, with strong anti-hallucination rules.
     """
 
+    time.sleep(35)
     joined = "\n\n".join(chunks)
 
     file_info = ""
